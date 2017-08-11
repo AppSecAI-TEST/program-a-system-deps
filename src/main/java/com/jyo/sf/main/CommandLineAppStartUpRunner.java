@@ -24,6 +24,7 @@ public class CommandLineAppStartUpRunner implements CommandLineRunner {
     private static final String DELIM = "  ";
     private static final String INSTALL = "Installing ";
     private static final String REMOVE = "Removing ";
+    private static final String STILL_NEEDED = " is still needed.";
     private static final String ALREADY_INSTALLED = " is already installed.";
     private static final String NOT_INSTALLED = " is not installed.";
     final List<String> components = new ArrayList<>();
@@ -67,14 +68,17 @@ public class CommandLineAppStartUpRunner implements CommandLineRunner {
         List<String> args = command.getArgs();
         
         switch(command.getCommandType()){
+        
         case LIST:
             components.stream().forEach(i -> System.out.println(DELIM+i));
             break;
+            
         case DEPEND:
             String component = args.get(0);
             List<String> depsForComponent = args.stream().skip(1).collect(Collectors.toList());
             dependents.put(component, depsForComponent);
             break;
+            
         case INSTALL:
             component = args.get(0);
             if(components.contains(component)){
@@ -94,28 +98,45 @@ public class CommandLineAppStartUpRunner implements CommandLineRunner {
             components.add(component);
             installedExplicitly.add(component);
             break;
+            
         case REMOVE:
             component = args.get(0);
-            if(!components.contains(component)){
-                System.out.println(DELIM+component+NOT_INSTALLED);
-                break;
-            }
-
-            depsForComponent = getAllDependencies(component);
-            for(String comp : depsForComponent){
-                if(!installedExplicitly.contains(comp)){
-                    System.out.println(DELIM+REMOVE+comp);
-                    components.remove(comp);    
-                }
-                
-            }
-            System.out.println(DELIM+REMOVE+component);
-            components.remove(component);
-            installedExplicitly.remove(component);
+            remove(component,true);
             break;
         case END:
             
         }
+    }
+
+    private void remove(String component, boolean isExplicit){
+        if(isExplicit)
+            installedExplicitly.remove(component);
+        
+        if(!components.contains(component)){
+            System.out.println(DELIM+component+NOT_INSTALLED);
+            return;
+        }
+
+        if(hasParentInstalled(component)){
+            System.out.println(DELIM+component+STILL_NEEDED);
+            return;
+        }
+        
+        List<String> depsForComponent = getAllDependencies(component);
+        for(String comp : depsForComponent){
+            if(components.contains(comp) && !installedExplicitly.contains(comp) && !hasParentInstalled(comp)){
+                remove(comp,false);
+            }
+            
+        }
+        System.out.println(DELIM+REMOVE+component);
+        components.remove(component);
+
+    }
+    
+    private boolean hasParentInstalled(String comp) {
+        long count = components.stream().flatMap(i -> getAllDependencies(i).stream() ).filter(i -> i.equals(comp)).count();
+        return count>0;
     }
 
     private List<String> getAllDependencies(String component) {
